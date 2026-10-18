@@ -253,11 +253,18 @@ jobs:
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" || ${{ github.event.inputs.ksu_type }} == "bakasu" ]]; then
             echo "正在配置BakaSU（由于SukiSU长期未维护无法正常编译，且BakaSU兼容sukisu管理器，故SukiSU源码仓库已重定向为bakasu）..."
             curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
-            # 移除 BakaSU 自 2026-10-10(48fa4bb7ec "suspend susfs build") 起对 susfs 的无条件硬停($(error "Please wait susfs update.")):
-            # 该挂起理由是 susfs 未同步上游 KernelSU，而 susfs4oki 已于 10-11/10-12 两次 Sync with official KernelSU main repo 完成同步；
-            # 线上真机(OnePlus PKX110)已验证 BakaSU b2c595dd + susfs v2.3.0 共存运行。BakaSU 日后解除挂起后本 sed 自动为空操作。
+            # BakaSU 2026-10-10 起与 susfs 生态不兼容（run #7 实证）：
+            # fa12ffde82(selinux_hide 重写) 删除了 selinux_hide.c 中的 fake_state 定义，
+            # 而 susfs4oki 补丁仍在 extern 引用 → vmlinux 链接期 undefined symbol: fake_state；
+            # 48fa4bb7ec 随后直接挂起 susfs 构建。在 susfs4oki 适配新版之前，
+            # 回钉到 5b76b884c7（fake_state 尚存的最后一个提交，也是挂起前最后提交）。
+            # susfs4oki 适配后可删除整个 if 块恢复跟踪 main。
             if [[ "${{ github.event.inputs.susfs_enable }}" == "true" ]]; then
-              sed -i '/susfs has NOT update/,$d' KernelSU/kernel/tools/susfs_compat.mk || true
+              cd KernelSU
+              # setup.sh 为完整克隆，目标提交已在本地对象库；fetch 仅兜底，失败不致命
+              git fetch origin 5b76b884c75f729a220bb317aa4a4fc78f0e0e9c || true
+              git checkout 5b76b884c75f729a220bb317aa4a4fc78f0e0e9c
+              cd ..
             fi
             echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@cctv18"' >> ./common/arch/arm64/configs/gki_defconfig
             cd ./KernelSU
