@@ -253,6 +253,12 @@ jobs:
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" || ${{ github.event.inputs.ksu_type }} == "bakasu" ]]; then
             echo "正在配置BakaSU（由于SukiSU长期未维护无法正常编译，且BakaSU兼容sukisu管理器，故SukiSU源码仓库已重定向为bakasu）..."
             curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
+            # 移除 BakaSU 自 2026-10-10(48fa4bb7ec "suspend susfs build") 起对 susfs 的无条件硬停($(error "Please wait susfs update.")):
+            # 该挂起理由是 susfs 未同步上游 KernelSU，而 susfs4oki 已于 10-11/10-12 两次 Sync with official KernelSU main repo 完成同步；
+            # 线上真机(OnePlus PKX110)已验证 BakaSU b2c595dd + susfs v2.3.0 共存运行。BakaSU 日后解除挂起后本 sed 自动为空操作。
+            if [[ "${{ github.event.inputs.susfs_enable }}" == "true" ]]; then
+              sed -i '/susfs has NOT update/,$d' KernelSU/kernel/tools/susfs_compat.mk || true
+            fi
             echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@cctv18"' >> ./common/arch/arm64/configs/gki_defconfig
             cd ./KernelSU
             # 生成自定义版本号（基于提交计数）, 失败时使用 114514
